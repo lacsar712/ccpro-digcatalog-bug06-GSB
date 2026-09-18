@@ -209,9 +209,8 @@ async function save() {
   try {
     const payload = {
       unitId: form.unitId,
-      // 编辑保存时用零值覆盖材质（错误）
-      materialId: form.id ? null : (form.materialId || null),
-      materialName: form.id ? '' : '',
+      // 提交下拉框真实值：未改材质时保持原材质；仅用户显式选「未指定」(null) 才清空
+      materialId: form.materialId ?? null,
       registerNo: form.registerNo,
       artifactType: form.artifactType,
       completeness: form.completeness,

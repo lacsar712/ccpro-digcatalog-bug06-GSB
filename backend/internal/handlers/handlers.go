@@ -346,7 +346,7 @@ func (h *Handler) applyFindReq(find *models.Find, req *findReq) {
 	find.FindDate = parseDate(req.FindDate)
 	find.Description = req.Description
 	find.StorageLoc = req.StorageLoc
-	// 零值路径：nil materialId 直接清空冗余名称（错误）
+	// materialId 为 nil 表示用户显式选择「未指定」，此时清空关联与冗余展示名
 	if find.MaterialID != nil {
 		var m models.Material
 		if err := h.DB.First(&m, *find.MaterialID).Error; err == nil {
