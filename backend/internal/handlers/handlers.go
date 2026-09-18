@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -298,6 +299,22 @@ type findReq struct {
 	FindDate     *string `json:"findDate"`
 	Description  string  `json:"description"`
 	StorageLoc   string  `json:"storageLoc"`
+	// MaterialIDSet 记录请求是否显式携带 materialId 字段，
+	// 用于区分“未传（保持原材质）”与“显式 null（用户选未指定，清空）”。
+	MaterialIDSet bool `json:"-"`
+}
+
+func (r *findReq) UnmarshalJSON(data []byte) error {
+	type plain findReq
+	if err := json.Unmarshal(data, (*plain)(r)); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	_, r.MaterialIDSet = fields["materialId"]
+	return nil
 }
 
 func parseDate(s *string) *time.Time {
@@ -339,23 +356,27 @@ func (h *Handler) GetFind(c *gin.Context) {
 
 func (h *Handler) applyFindReq(find *models.Find, req *findReq) {
 	find.UnitID = req.UnitID
-	find.MaterialID = req.MaterialID
 	find.RegisterNo = req.RegisterNo
 	find.ArtifactType = req.ArtifactType
 	find.Completeness = req.Completeness
 	find.FindDate = parseDate(req.FindDate)
 	find.Description = req.Description
 	find.StorageLoc = req.StorageLoc
-	// 零值路径：nil materialId 直接清空冗余名称（错误）
-	if find.MaterialID != nil {
-		var m models.Material
-		if err := h.DB.First(&m, *find.MaterialID).Error; err == nil {
-			find.MaterialName = m.Name
-		} else {
-			find.MaterialName = req.MaterialName
-		}
-	} else {
+	// 材质三态：未携带 materialId = 保持原材质与展示名；
+	// 显式 null（用户选“未指定”）= 清空；数值 = 设置材质并同步冗余展示名。
+	if !req.MaterialIDSet {
+		return
+	}
+	find.MaterialID = req.MaterialID
+	if req.MaterialID == nil {
 		find.MaterialName = ""
+		return
+	}
+	var m models.Material
+	if err := h.DB.First(&m, *req.MaterialID).Error; err == nil {
+		find.MaterialName = m.Name
+	} else {
+		find.MaterialName = req.MaterialName
 	}
 }
 
